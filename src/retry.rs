@@ -20,24 +20,32 @@ impl<P, S> Retry<P, S> {
 impl<P, S, Request> Service<Request> for Retry<P, S>
 where
     P: Policy<Request, S::Response, S::Error> + Clone,
-    S: Service<Request> + Clone,
+    S: Service<Request>,
 {
     type Response = S::Response;
     type Error = S::Error;
 
     async fn call(&self, mut request: Request) -> Result<Self::Response, Self::Error> {
+        let mut policy = self.policy.clone();
         loop {
-            match service.call(request.clone()).await {
-                Ok(response) => return Ok(response),
-                mut response @ Err(_) => {
-                    if let Some(duration) = policy.retry(&mut request, &mut response) {
-                        duration.await;
-                        continue;
+            match policy.clone_request(&request) {
+                Some(cloned_request) => {
+                    match self.service.call(cloned_request).await {
+                        Ok(response) => return Ok(response),
+                        mut response @ Err(_) => {
+                            if let Some(duration) = policy.retry(&mut request, &mut response) {
+                                duration.await;
+                                continue;
+                            }
+        
+                            return response;
+                        }
                     }
-
-                    return response;
                 }
+
+                None => return self.service.call(request).await,
             }
+
         }
     }
 }
