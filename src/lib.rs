@@ -3,6 +3,7 @@
 #![feature(return_type_notation)]
 
 pub mod filter;
+pub mod retry;
 
 pub trait Service<Request> {
     /// Responses given by the service.
